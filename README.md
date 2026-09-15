@@ -41,6 +41,16 @@ Simulator or ESP32
 
 Automatic safety control will remain local to the ESP32 so essential cage protection does not depend on the cloud or internet connection.
 
+## Local backend stack
+
+After creating a root `.env` from `.env.example`, the complete backend starts with:
+
+```bash
+docker compose up --build -d
+```
+
+This runs PostgreSQL, Redis, database migrations, Django/Daphne and the HiveMQ subscriber. See `backend/README.md` for configuration, verification and administrator setup.
+
 ## Security
 
 Never commit Wi-Fi passwords, MQTT credentials, Django secrets or production database passwords. Copy `.env.example` to `.env` locally and supply real values only in the local or deployment environment.
