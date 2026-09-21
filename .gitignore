@@ -12,6 +12,7 @@ __pycache__/
 venv/
 staticfiles/
 media/
+iotCageVenv/
 
 # Node / React
 node_modules/
