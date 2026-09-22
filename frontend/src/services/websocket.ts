@@ -1,4 +1,4 @@
-import { CAGE_ID, FARM_ID } from "./api";
+import { selectedCage } from "./api";
 import type { CageEvent, ConnectionState } from "../types/telemetry";
 
 const explicitUrl = import.meta.env.VITE_WS_BASE_URL as string | undefined;
@@ -21,7 +21,8 @@ export function connectCageSocket(
   const connect = () => {
     if (stopped) return;
     onState(attempt ? "reconnecting" : "connecting");
-    socket = new WebSocket(`${websocketBaseUrl()}/ws/farms/${encodeURIComponent(FARM_ID)}/cages/${encodeURIComponent(CAGE_ID)}/`);
+    const { farmId, cageId } = selectedCage();
+    socket = new WebSocket(`${websocketBaseUrl()}/ws/farms/${encodeURIComponent(farmId)}/cages/${encodeURIComponent(cageId)}/`);
     socket.onopen = () => { attempt = 0; onState("live"); };
     socket.onmessage = (message) => {
       try { onEvent(JSON.parse(message.data) as CageEvent); }
