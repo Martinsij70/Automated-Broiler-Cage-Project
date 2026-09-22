@@ -4,6 +4,7 @@ from django.db import models
 from django.utils import timezone
 
 class Farm(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="farms", on_delete=models.SET_NULL)
     external_id = models.SlugField(max_length=64, unique=True)
     name = models.CharField(max_length=160)
     created_at = models.DateTimeField(auto_now_add=True)
