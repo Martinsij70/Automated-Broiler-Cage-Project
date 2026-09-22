@@ -64,6 +64,7 @@ export interface AlertItem {
   severity: "warning" | "critical";
   time: string;
   tier: number | null;
+  acknowledged: boolean;
 }
 
 export interface ActiveBatch {
@@ -74,6 +75,10 @@ export interface ActiveBatch {
   feed_consumed_kg: string;
   active: boolean;
 }
+
+export interface UserAccount { id: number; username: string; email: string; }
+export interface CageOption { farm_id: string; farm_name: string; cage_id: string; cage_name: string; }
+export interface DailyWeight { date: string; tier: number; average_weight_kg: number; daily_increase_kg: number | null; }
 
 export interface DashboardSnapshot {
   farmName: string;
