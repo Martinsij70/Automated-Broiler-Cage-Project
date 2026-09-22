@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CAGE_ID, FARM_ID, loadDashboardData } from "../services/api";
+import { loadDashboardData, selectedCage } from "../services/api";
 import { connectCageSocket } from "../services/websocket";
 import type { ApiAlert, ApiTelemetryReading, ConnectionState, DashboardSnapshot, MetricState, TierReading } from "../types/telemetry";
 
@@ -50,6 +50,7 @@ export function useDashboardData() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clock, setClock] = useState(Date.now());
 
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -69,7 +70,12 @@ export function useDashboardData() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 10000);
+    return () => window.clearInterval(timer);
+  }, []);
   useEffect(() => connectCageSocket((message) => {
+    setError(null);
     if (message.event === "telemetry") {
       const reading = message.data as ApiTelemetryReading;
       setLatest((current) => [...current.filter((item) => item.tier !== reading.tier), reading].sort((a, b) => a.tier - b.tier));
@@ -86,13 +92,16 @@ export function useDashboardData() {
   const snapshot = useMemo<DashboardSnapshot>(() => {
     const tiers = latest.map(mapTier);
     const newest = latest.reduce<ApiTelemetryReading | null>((result, item) => !result || item.sampled_at > result.sampled_at ? item : result, null);
+    const ageSeconds = newest ? (clock - new Date(newest.sampled_at).getTime()) / 1000 : Number.POSITIVE_INFINITY;
+    const effectiveDeviceState = deviceState === "offline" ? "offline" : ageSeconds > 90 ? "stale" : deviceState;
     const mappedAlerts = alerts.filter((item) => !item.resolved_at).map((item) => ({
       id: `ALT-${item.id}`,
       title: item.title,
       detail: item.detail,
       severity: item.severity,
       time: relativeTime(item.opened_at),
-      tier: item.tier
+      tier: item.tier,
+      acknowledged: item.acknowledged_at !== null
     }));
     const orderedHistory = [...history].reverse().map((item) => ({
       time: new Date(item.sampled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -100,13 +109,14 @@ export function useDashboardData() {
       humidity: item.sensors.humidity,
       tier: item.tier
     }));
+    const selection = selectedCage();
     return {
-      farmName: FARM_ID,
-      cageName: CAGE_ID,
+      farmName: selection.farmId,
+      cageName: selection.cageId,
       batchId: batch?.batch_id ?? "No active batch",
       birdAgeDays: ageInDays(batch?.started_at),
       birdCount: batch?.bird_count ?? null,
-      deviceState,
+      deviceState: effectiveDeviceState,
       lastUpdated: newest ? relativeTime(newest.sampled_at) : "waiting for data",
       averageTemperatureC: numberAverage(tiers.map((item) => item.temperatureC)),
       averageHumidityRh: numberAverage(tiers.map((item) => item.humidityRh)),
@@ -117,7 +127,7 @@ export function useDashboardData() {
       history: orderedHistory,
       alerts: mappedAlerts
     };
-  }, [alerts, batch, deviceState, history, latest]);
+  }, [alerts, batch, clock, deviceState, history, latest]);
 
   return { snapshot, connectionState, loading, error, refresh: () => refresh() };
 }
