@@ -65,8 +65,8 @@ class CageSimulator:
             return
         self.connected = True
         client.subscribe([(self.topic("command"), 1), (self.topic("config"), 1)])
-        self.publish("status", self.status_payload())
-        self.publish("availability", self.status_payload(), retain=True)
+        self.publish("status", self.status_payload(), wait=False)
+        self.publish("availability", self.status_payload(), retain=True, wait=False)
         LOGGER.info("Connected securely to HiveMQ")
 
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
@@ -84,10 +84,10 @@ class CageSimulator:
         except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
             LOGGER.warning("Rejected message on %s: %s", message.topic, exc)
 
-    def publish(self, suffix: str, payload: dict, retain: bool = False) -> None:
+    def publish(self, suffix: str, payload: dict, retain: bool = False, wait: bool = True) -> None:
         encoded = json.dumps(payload, separators=(",", ":"), allow_nan=False)
         info = self.client.publish(self.topic(suffix), encoded, qos=1, retain=retain)
-        if hasattr(info, "wait_for_publish"):
+        if wait and hasattr(info, "wait_for_publish"):
             info.wait_for_publish(timeout=10)
         LOGGER.info("Published %s: %s", suffix, encoded)
 
@@ -162,7 +162,7 @@ class CageSimulator:
         acknowledgement = {"command_id": command_id or "missing", "status": status, "timestamp": utc_now()}
         if detail:
             acknowledgement["detail"] = detail
-        self.publish("ack", acknowledgement)
+        self.publish("ack", acknowledgement, wait=False)
         return acknowledgement
 
     def handle_config(self, payload: dict) -> None:
