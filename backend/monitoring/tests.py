@@ -27,6 +27,8 @@ class ApiTests(TestCase):
         self.client = APIClient()
         self.reading = ingest_telemetry(IngestionTests.payload())
         FlockBatch.objects.create(cage=self.reading.cage, batch_id="batch-001", started_at=date.today(), bird_count=200, initial_total_weight_kg=8, current_total_weight_kg=48, feed_consumed_kg=64)
+        self.user = get_user_model().objects.create_user(username="api-owner", password="safe-password-123")
+        self.client.force_authenticate(self.user)
     def test_latest_telemetry(self):
         response = self.client.get(reverse("latest-telemetry", kwargs={"farm_id": "farm01", "cage_id": "cage01"}))
         self.assertEqual(response.status_code, 200)
@@ -37,11 +39,12 @@ class ApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["fcr"], 1.6)
     def test_user_can_register_and_acknowledge_alert(self):
-        response = self.client.post(reverse("auth-register"), {"username": "operator", "email": "operator@example.com", "password": "safe-password-123"}, format="json")
+        client = APIClient()
+        response = client.post(reverse("auth-register"), {"username": "operator", "email": "operator@example.com", "password": "safe-password-123"}, format="json")
         self.assertEqual(response.status_code, 201)
-        self.client.post(reverse("farm-cage-setup"), {"farm_id": "farm01", "farm_name": "Pilot Farm", "cage_id": "cage01", "cage_name": "Cage 01"}, format="json")
+        client.post(reverse("farm-cage-setup"), {"farm_id": "farm01", "farm_name": "Pilot Farm", "cage_id": "cage01", "cage_name": "Cage 01"}, format="json")
         alert = Alert.objects.first()
-        response = self.client.post(reverse("alert-acknowledge", kwargs={"farm_id": "farm01", "cage_id": "cage01", "alert_id": alert.id}), {}, format="json")
+        response = client.post(reverse("alert-acknowledge", kwargs={"farm_id": "farm01", "cage_id": "cage01", "alert_id": alert.id}), {}, format="json")
         self.assertEqual(response.status_code, 200)
         alert.refresh_from_db()
         self.assertIsNotNone(alert.acknowledged_at)
@@ -55,6 +58,10 @@ class ApiTests(TestCase):
         response = self.client.get(reverse("telemetry-export", kwargs={"farm_id": "farm01", "cage_id": "cage01"}))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "text/csv")
+    def test_dashboard_data_requires_authentication(self):
+        client = APIClient()
+        response = client.get(reverse("latest-telemetry", kwargs={"farm_id": "farm01", "cage_id": "cage01"}))
+        self.assertIn(response.status_code, {401, 403})
     def test_daily_weight_endpoint_groups_by_tier_and_date(self):
         self.reading.weight_kg = 12.5
         self.reading.save(update_fields=["weight_kg"])
