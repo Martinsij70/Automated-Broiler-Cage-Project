@@ -87,7 +87,7 @@ class FarmCageSetupView(APIView):
         return Response({"farm_id": farm.external_id, "farm_name": farm.name, "cage_id": cage.external_id, "cage_name": cage.name}, status=status.HTTP_201_CREATED)
 
 class LatestTelemetryView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     def get(self, request, farm_id, cage_id):
         cage = get_cage(farm_id, cage_id)
         latest = TelemetryReading.objects.filter(cage=cage, tier=OuterRef("tier")).order_by("-sampled_at").values("id")[:1]
@@ -95,7 +95,7 @@ class LatestTelemetryView(APIView):
         return Response(TelemetryReadingSerializer(rows, many=True).data)
 
 class TelemetryHistoryView(generics.ListAPIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = TelemetryReadingSerializer
     def get_queryset(self):
         qs = TelemetryReading.objects.filter(cage=get_cage(self.kwargs["farm_id"], self.kwargs["cage_id"])).select_related("cage__farm", "tier")
@@ -104,7 +104,7 @@ class TelemetryHistoryView(generics.ListAPIView):
         return qs.order_by("-sampled_at")
 
 class AlertListView(generics.ListAPIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = AlertSerializer
     def get_queryset(self): return Alert.objects.filter(cage=get_cage(self.kwargs["farm_id"], self.kwargs["cage_id"])).select_related("tier")
 
@@ -118,19 +118,19 @@ class AlertAcknowledgeView(APIView):
         return Response(AlertSerializer(alert).data)
 
 class SecurityEventListView(generics.ListAPIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = SecurityEventSerializer
     def get_queryset(self): return SecurityEvent.objects.filter(cage=get_cage(self.kwargs["farm_id"], self.kwargs["cage_id"])).select_related("tier")
 
 class DeviceStatusView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     def get(self, request, farm_id, cage_id):
         device = get_object_or_404(Device, cage=get_cage(farm_id, cage_id))
         state = Device.State.STALE if device.last_seen_at and (timezone.now() - device.last_seen_at).total_seconds() > 90 else device.state
         return Response({"device_id": device.device_id, "state": state, "last_seen_at": device.last_seen_at})
 
 class ThresholdView(APIView):
-    def get_permissions(self): return [permissions.AllowAny()] if self.request.method == "GET" else [permissions.IsAuthenticated()]
+    permission_classes = [permissions.IsAuthenticated]
     def get(self, request, farm_id, cage_id):
         config, _ = ThresholdConfiguration.objects.get_or_create(cage=get_cage(farm_id, cage_id))
         return Response(ThresholdSerializer(config).data)
@@ -157,7 +157,7 @@ class CommandCreateView(APIView):
         return Response({"command_id": command.command_id, "status": command.status, "payload": payload}, status=status.HTTP_201_CREATED)
 
 class ActiveBatchView(APIView):
-    def get_permissions(self): return [permissions.AllowAny()] if self.request.method == "GET" else [permissions.IsAuthenticated()]
+    permission_classes = [permissions.IsAuthenticated]
     def get(self, request, farm_id, cage_id):
         return Response(FlockBatchSerializer(get_object_or_404(FlockBatch, cage=get_cage(farm_id, cage_id), active=True)).data)
     def post(self, request, farm_id, cage_id):
@@ -187,7 +187,7 @@ class TelemetryExportView(APIView):
         return response
 
 class WeightDailyView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     def get(self, request, farm_id, cage_id):
         rows = (TelemetryReading.objects.filter(cage=get_cage(farm_id, cage_id), weight_kg__isnull=False)
                 .annotate(day=TruncDate("sampled_at")).values("day", "tier__number").annotate(average_weight_kg=Avg("weight_kg")).order_by("day", "tier__number"))
