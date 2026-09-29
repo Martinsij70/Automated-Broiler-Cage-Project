@@ -41,18 +41,19 @@ function mapTier(reading: ApiTelemetryReading): TierReading {
   };
 }
 
-export function useDashboardData() {
+export function useDashboardData(enabled = true) {
   const [latest, setLatest] = useState<ApiTelemetryReading[]>([]);
   const [history, setHistory] = useState<ApiTelemetryReading[]>([]);
   const [alerts, setAlerts] = useState<ApiAlert[]>([]);
   const [deviceState, setDeviceState] = useState<"online" | "stale" | "offline">("offline");
   const [batch, setBatch] = useState<Awaited<ReturnType<typeof loadDashboardData>>["batch"]>(null);
-  const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
-  const [loading, setLoading] = useState(true);
+  const [connectionState, setConnectionState] = useState<ConnectionState>(enabled ? "connecting" : "offline");
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
   const [clock, setClock] = useState(Date.now());
 
   const refresh = useCallback(async (quiet = false) => {
+    if (!enabled) return;
     if (!quiet) setLoading(true);
     try {
       const result = await loadDashboardData();
@@ -67,14 +68,23 @@ export function useDashboardData() {
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      setConnectionState("offline");
+      return;
+    }
+    void refresh();
+  }, [enabled, refresh]);
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 10000);
     return () => window.clearInterval(timer);
   }, []);
-  useEffect(() => connectCageSocket((message) => {
+  useEffect(() => {
+    if (!enabled) return;
+    return connectCageSocket((message) => {
     setError(null);
     if (message.event === "telemetry") {
       const reading = message.data as ApiTelemetryReading;
@@ -87,7 +97,8 @@ export function useDashboardData() {
     } else if (message.event === "alert" || message.event === "security_alert") {
       void refresh(true);
     }
-  }, setConnectionState), [refresh]);
+    }, setConnectionState);
+  }, [enabled, refresh]);
 
   const snapshot = useMemo<DashboardSnapshot>(() => {
     const tiers = latest.map(mapTier);
