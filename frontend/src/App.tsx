@@ -10,12 +10,11 @@ type PageId = "overview" | "live" | "analytics" | "alerts" | "batches" | "mainte
 const navigation: { id: PageId; label: string }[] = [
   { id: "overview", label: "Overview" }, { id: "live", label: "Live monitoring" },
   { id: "analytics", label: "Analytics" }, { id: "alerts", label: "Alerts" },
-  { id: "batches", label: "Batches" }, { id: "maintenance", label: "Maintenance" },
-  { id: "account", label: "Account & setup" }
+  { id: "batches", label: "Batches" }, { id: "maintenance", label: "Maintenance" }
 ];
 const pageTitles: Record<PageId, string> = {
   overview: "Farm overview", live: "Live monitoring", analytics: "Analytics",
-  alerts: "Alert centre", batches: "Batch management", maintenance: "Maintenance", account: "Account and cage setup"
+  alerts: "Alert centre", batches: "Batch management", maintenance: "Maintenance", account: "Account settings"
 };
 const show = (value: number | null, digits = 1) => value === null ? "—" : value.toFixed(digits);
 
@@ -98,16 +97,24 @@ function MaintenancePage({ data }: { data: DashboardSnapshot }) {
     <article className="panel"><p className="eyebrow">SENSOR SOURCES</p><h2>Connected tiers</h2><div className="maintenance-list">{data.tiers.map((tier) => <div key={tier.tier}><span className="connection-dot" /><div><strong>Tier {tier.tier}</strong><small>Source: {tier.source} · {new Date(tier.sampledAt).toLocaleString()}</small></div><b>{tier.state}</b></div>)}</div></article></section>;
 }
 
-function AccountPage({ user, cages, onUser, onCageCreated }: { user: UserAccount | null; cages: CageOption[]; onUser: (user: UserAccount | null) => void; onCageCreated: () => void }) {
+function AuthGateway({ onUser }: { onUser: (user: UserAccount) => void }) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [message, setMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const authSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const form = new FormData(event.currentTarget);
+    setSubmitting(true);
     try {
       const result = mode === "register" ? await register({ username: String(form.get("username")), email: String(form.get("email") ?? ""), password: String(form.get("password")) }) : await signIn({ username: String(form.get("username")), password: String(form.get("password")) });
-      onUser(result); setMessage(null);
+      if (result) onUser(result); setMessage(null);
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Account request failed"); }
+    finally { setSubmitting(false); }
   };
+  return <main className="auth-screen"><section className="auth-showcase"><div className="auth-brand"><span className="brand__mark">IW</span><div><strong>InsightWorks</strong><small>Smart Poultry</small></div></div><div className="auth-copy"><span className="auth-kicker">AUTOMATED BROILER CAGE</span><h1>Smarter monitoring for healthier birds.</h1><p>Track environmental conditions, tier performance, alerts and flock growth from one secure farm workspace.</p><div className="auth-highlights"><span><b>4</b> monitored tiers</span><span><b>Live</b> MQTT telemetry</span><span><b>24/7</b> condition awareness</span></div></div><div className="auth-orbit auth-orbit--one" /><div className="auth-orbit auth-orbit--two" /></section><section className="auth-form-side"><div className="auth-card"><div><p className="eyebrow">SECURE FARM ACCESS</p><h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2><p className="muted">{mode === "login" ? "Sign in to open the monitoring dashboard." : "Register an operator account to configure your farm."}</p></div><div className="auth-switch" role="tablist" aria-label="Authentication mode"><button type="button" className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setMessage(null); }}>Sign in</button><button type="button" className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setMessage(null); }}>Sign up</button></div>{message && <div className="error-banner">{message}</div>}<form className="auth-form" onSubmit={(event) => void authSubmit(event)}><label>Username<input name="username" autoComplete="username" placeholder="Enter your username" required minLength={3} /></label>{mode === "register" && <label>Email address<input name="email" type="email" autoComplete="email" placeholder="name@example.com" /></label>}<label>Password<input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="At least 8 characters" required minLength={8} /></label><button className="primary-button auth-submit" type="submit" disabled={submitting}>{submitting ? "Please wait…" : mode === "login" ? "Open dashboard" : "Create account"}</button></form><p className="auth-footnote">Protected access for authorised farm operators.</p></div></section></main>;
+}
+
+function AccountPage({ user, cages, onSignOut, onCageCreated }: { user: UserAccount; cages: CageOption[]; onSignOut: () => void; onCageCreated: () => void }) {
+  const [message, setMessage] = useState<string | null>(null);
   const cageSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const form = new FormData(event.currentTarget);
     try {
@@ -115,32 +122,34 @@ function AccountPage({ user, cages, onUser, onCageCreated }: { user: UserAccount
       if (cage) { selectCage(cage.farm_id, cage.cage_id); onCageCreated(); window.location.reload(); }
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Cage setup failed"); }
   };
-  if (!user) return <section className="page-stack"><article className="panel auth-panel"><div className="panel__header"><div><p className="eyebrow">SECURE ACCESS</p><h2>{mode === "login" ? "Sign in" : "Create operator account"}</h2></div><button className="text-button" onClick={() => setMode(mode === "login" ? "register" : "login")}>{mode === "login" ? "Register" : "Use existing account"}</button></div>{message && <div className="error-banner">{message}</div>}<form className="form-grid" onSubmit={(event) => void authSubmit(event)}><label>Username<input name="username" required minLength={3} /></label>{mode === "register" && <label>Email<input name="email" type="email" /></label>}<label>Password<input name="password" type="password" required minLength={8} /></label><button className="primary-button" type="submit">{mode === "login" ? "Sign in" : "Register"}</button></form></article></section>;
-  return <section className="page-stack"><article className="panel"><div className="panel__header"><div><p className="eyebrow">SIGNED IN</p><h2>{user.username}</h2><p className="muted">{user.email || "No email supplied"}</p></div><button className="secondary-button" onClick={() => void signOut().then(() => onUser(null))}>Sign out</button></div></article>
+  return <section className="page-stack"><article className="panel account-summary"><div className="panel__header"><div className="account-identity"><span>{user.username.slice(0, 2).toUpperCase()}</span><div><p className="eyebrow">SIGNED IN OPERATOR</p><h2>{user.username}</h2><p className="muted">{user.email || "No email supplied"}</p></div></div><button className="secondary-button" onClick={() => void signOut().then(onSignOut)}>Sign out</button></div></article>
     <article className="panel"><p className="eyebrow">AVAILABLE CAGES</p><h2>Select monitoring context</h2><div className="cage-list">{cages.map((cage) => <button className="secondary-button" key={`${cage.farm_id}-${cage.cage_id}`} onClick={() => { selectCage(cage.farm_id, cage.cage_id); window.location.reload(); }}>{cage.farm_name} · {cage.cage_name}</button>)}</div></article>
     <article className="panel"><p className="eyebrow">FARM AND CAGE SETUP</p><h2>Register monitoring location</h2>{message && <div className="error-banner">{message}</div>}<form className="form-grid" onSubmit={(event) => void cageSubmit(event)}><label>Farm ID<input name="farm_id" placeholder="farm01" required /></label><label>Farm name<input name="farm_name" placeholder="Pilot Farm" required /></label><label>Cage ID<input name="cage_id" placeholder="cage01" required /></label><label>Cage name<input name="cage_name" placeholder="Four-tier Cage 01" required /></label><button className="primary-button" type="submit">Save and select cage</button></form></article></section>;
 }
 
 function App() {
   const [page, setPage] = useState<PageId>("overview");
-  const { snapshot: data, connectionState, loading, error, refresh } = useDashboardData();
-  const [user, setUser] = useState<UserAccount | null>(null);
+  const [user, setUser] = useState<UserAccount | null | undefined>(undefined);
+  const { snapshot: data, connectionState, loading, error, refresh } = useDashboardData(Boolean(user));
   const [cages, setCages] = useState<CageOption[]>([]);
   const [weights, setWeights] = useState<DailyWeight[]>([]);
-  useEffect(() => { void getCurrentUser().then((account) => setUser(account)); }, []);
+  useEffect(() => { void getCurrentUser().then((account) => setUser(account)).catch(() => setUser(null)); }, []);
   useEffect(() => { if (user) void listCages().then((items) => setCages(items ?? [])); else setCages([]); }, [user]);
   useEffect(() => {
+    if (!user) { setWeights([]); return; }
     const load = () => void loadDailyWeights().then((items) => setWeights(items ?? [])).catch(() => setWeights([]));
     load(); const timer = window.setInterval(load, 60000); return () => window.clearInterval(timer);
-  }, []);
+  }, [user]);
   const handleAcknowledge = async (id: number) => { await acknowledgeAlert(id); await refresh(); };
   const connectionLabel = connectionState === "live" ? "Dashboard connected" : connectionState;
+  if (user === undefined) return <main className="auth-loading"><div><span className="brand__mark">IW</span><p>Checking secure session…</p></div></main>;
+  if (user === null) return <AuthGateway onUser={(account) => { setUser(account); setPage("overview"); }} />;
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><span className="brand__mark">IW</span><div><strong>InsightWorks</strong><small>Smart Poultry</small></div></div>
     <nav aria-label="Dashboard navigation">{navigation.map((item, index) => <button className={page === item.id ? "nav-item nav-item--active" : "nav-item"} key={item.id} onClick={() => setPage(item.id)}><span>{String(index + 1).padStart(2, "0")}</span>{item.label}</button>)}</nav>
     <div className="sidebar__footer"><span className={`connection-dot connection-dot--${connectionState}`} /><div><strong>{connectionLabel}</strong><small>{data.deviceState} cage device</small></div></div></aside>
-    <main><header className="topbar"><div><p className="eyebrow">AUTOMATED BROILER CAGE</p><h1>{pageTitles[page]}</h1></div><div className="topbar__actions"><div className={`live-status live-status--${connectionState}`}><span className="pulse" />{connectionLabel} · device {data.deviceState} · {data.lastUpdated}</div><button className="profile" aria-label="User profile" onClick={() => setPage("account")}>{user ? user.username.slice(0, 2).toUpperCase() : "?"}</button></div></header>
+    <main><header className="topbar"><div><p className="eyebrow">AUTOMATED BROILER CAGE</p><h1>{pageTitles[page]}</h1></div><div className="topbar__actions"><div className={`live-status live-status--${connectionState}`}><span className="pulse" />{connectionLabel} · device {data.deviceState} · {data.lastUpdated}</div><button className="profile" aria-label="Open account settings" onClick={() => setPage("account")}>{user.username.slice(0, 2).toUpperCase()}</button></div></header>
       <div className="page-content">{loading && <div className="notice">Loading live cage data…</div>}{error && <div className="error-banner"><span>{error}</span><button onClick={refresh}>Try again</button></div>}
-        {!loading && <>{page === "overview" && <OverviewPage data={data} openAlerts={() => setPage("alerts")} />}{page === "live" && <LivePage data={data} />}{page === "analytics" && <AnalyticsPage data={data} weights={weights} user={user} />}{page === "alerts" && <AlertsPage data={data} user={user} onAcknowledge={handleAcknowledge} />}{page === "batches" && <BatchesPage data={data} user={user} onSaved={() => void refresh()} />}{page === "maintenance" && <MaintenancePage data={data} />}{page === "account" && <AccountPage user={user} cages={cages} onUser={setUser} onCageCreated={() => void listCages().then((items) => setCages(items ?? []))} />}</>}</div></main></div>;
+        {!loading && <>{page === "overview" && <OverviewPage data={data} openAlerts={() => setPage("alerts")} />}{page === "live" && <LivePage data={data} />}{page === "analytics" && <AnalyticsPage data={data} weights={weights} user={user} />}{page === "alerts" && <AlertsPage data={data} user={user} onAcknowledge={handleAcknowledge} />}{page === "batches" && <BatchesPage data={data} user={user} onSaved={() => void refresh()} />}{page === "maintenance" && <MaintenancePage data={data} />}{page === "account" && <AccountPage user={user} cages={cages} onSignOut={() => { setUser(null); setPage("overview"); }} onCageCreated={() => void listCages().then((items) => setCages(items ?? []))} />}</>}</div></main></div>;
 }
 
 export default App;
