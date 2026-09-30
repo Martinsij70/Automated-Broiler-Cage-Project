@@ -55,3 +55,8 @@ class FlockBatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = FlockBatch
         fields = ["batch_id", "started_at", "bird_count", "initial_total_weight_kg", "current_total_weight_kg", "feed_consumed_kg", "weight_gained_kg", "fcr", "active"]
+
+    def validate_bird_count(self, value):
+        if value < 1:
+            raise serializers.ValidationError("Bird count must be at least 1.")
+        return value

@@ -1,21 +1,27 @@
 # Frontend
 
-Responsive monitoring dashboard built with React, TypeScript and Vite.
+Responsive monitoring dashboard built with React, TypeScript and Vite. It now uses the Django REST API for the initial snapshot and history, then Django Channels WebSockets for live telemetry, status and alert updates.
 
-## Included in the first interface
+## Configure
 
-- Farm, cage and batch summary
-- Device online status and data freshness
-- Six cage-level measurement cards
-- Four-tier temperature, humidity and light cards
-- Temperature and humidity trend chart
-- Active-alert cards
-- Responsive desktop, tablet and phone layouts
-- Typed realistic mock telemetry
+Copy the example environment file:
+
+```bash
+cd frontend
+cp .env.example .env
+```
+
+Defaults target the local Docker backend at `http://localhost:8000`, farm `farm01` and cage `cage01`. Change only the public browser endpoints and cage identifiers here. Never place HiveMQ device credentials in the frontend.
 
 ## Run locally
 
-Requirements: a Node.js release supported by the Vite version in `package.json`.
+Start the backend from the repository root:
+
+```bash
+docker compose up -d --build
+```
+
+Then start React:
 
 ```bash
 cd frontend
@@ -23,23 +29,24 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite, normally `http://localhost:5173`.
+Open `http://localhost:5173`. The dashboard loads:
 
-## Production build
+- Latest four-tier readings from REST
+- Twelve hours of telemetry history
+- Device state and active alerts
+- Active flock batch when one exists
+- Live telemetry, status and alert events through WebSocket
+
+If the WebSocket disconnects, the client reconnects with bounded exponential backoff. REST errors show a retry control rather than silently displaying mock readings.
+
+## Verify
 
 ```bash
 npm run build
-npm run preview
 ```
 
-## Current data source
+With the simulator running, confirm that all four tier cards update without refreshing the browser. Stop the simulator and confirm device status eventually becomes stale or offline. Run the `hot`, `high-gas` and motion scenarios to verify alert updates.
 
-The first interface reads typed mock data from `src/data/mockData.ts`. This intentionally lets the interface progress before the Django and HiveMQ pipeline is ready.
+## Production
 
-The integration phase will replace the mock import with:
-
-- Django REST Framework for current and historical records
-- Django Channels or another authenticated live-data channel
-- Clear loading, stale, offline and error states
-
-The browser will not receive ESP32 or HiveMQ device credentials.
+Set `VITE_API_BASE_URL` to the public HTTPS API and `VITE_WS_BASE_URL` to its WSS origin before building. The frontend never connects directly to HiveMQ.

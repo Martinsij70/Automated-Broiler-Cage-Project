@@ -2,6 +2,9 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 class CageConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
+        if not self.scope["user"].is_authenticated:
+            await self.close(code=4401)
+            return
         self.group_name = f"cage_{self.scope['url_route']['kwargs']['farm_id']}_{self.scope['url_route']['kwargs']['cage_id']}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
